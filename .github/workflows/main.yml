@@ -1,0 +1,54 @@
+name: Publish and deploy Auth Service
+
+on:
+  workflow_dispatch: # Pipeline disabled for now, can only be triggered manually
+  # push:
+  #   branches:
+  #     - main
+
+jobs:
+  deploy-server:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+
+      - name: Configure Git for Private Modules
+        run: |
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/Aditya-0011".insteadOf "https://github.com/Aditya-0011"
+
+      - name: Fetch Dependencies and Build Auth
+        env:
+          GOPRIVATE: "github.com/Aditya-0011/*"
+        run: |
+          go get github.com/Aditya-0011/common/protos@latest
+          go mod tidy
+          GOOS=linux GOARCH=arm64 go build -ldflags "-s -w" -o auth main.go
+
+      - name: Copy server to VM
+        if: success()
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_KEY }}
+          port: 22
+          source: "./auth"
+          target: "~/auth-service"
+
+      - name: Server Setup
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_KEY }}
+          port: 22
+          script: |
+            cd ~/auth-service
+            ./move.sh
