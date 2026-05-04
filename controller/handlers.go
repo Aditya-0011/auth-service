@@ -70,7 +70,7 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 
 		switch outcode {
 		case -1:
-			return &auth.LoginResponse{UserId: int64(newId), UserEmail: req.Email}, nil
+			return &auth.LoginResponse{UserId: int32(newId), UserEmail: req.Email}, nil
 		case 0:
 			return nil, status.Errorf(codes.AlreadyExists, "user already exists")
 		case 1:
@@ -95,6 +95,6 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
 		}
 
-		return &auth.LoginResponse{UserId: int64(*id), UserEmail: req.Email}, nil
+		return &auth.LoginResponse{UserId: int32(*id), UserEmail: req.Email}, nil
 	}
 }
