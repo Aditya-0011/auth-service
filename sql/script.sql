@@ -34,11 +34,11 @@ exception
 end;
 $$ language plpgsql security definer;
 
-create user auth_service with password 'test@12345'
+create user auth_service with password 'test@12345';
 revoke all on database infra from auth_service;
 grant connect on database infra to auth_service;
 grant usage on schema public to auth_service;
 grant usage on schema account to auth_service;
 grant select on table account.creds to auth_service;
 grant execute on function account.create (varchar, varchar) to auth_service;
-revoke insert, update, delete on account.creds to auth_service;
+revoke insert, update, delete on account.creds from auth_service;

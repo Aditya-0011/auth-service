@@ -5,7 +5,7 @@ import (
 	"auth/db"
 	"auth/middlewares"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -13,14 +13,15 @@ import (
 	"time"
 
 	"buf.build/go/protovalidate"
-	auth "github.com/Aditya-0011/common/contracts/go"
+	auth "github.com/Aditya-0011/common/contracts/go/auth"
 	"google.golang.org/grpc"
 )
 
 func main() {
 	database, err := db.Setup()
 	if err != nil {
-		log.Fatal("Failed to setup databases:", err)
+		slog.Error("Failed to setup databases", "error", err)
+		os.Exit(1)
 	}
 	defer database.Cleanup()
 
@@ -31,17 +32,19 @@ func main() {
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		slog.Error("failed to listen", "error", err)
+		os.Exit(1)
 	}
 
 	validator, err := protovalidate.New()
 	if err != nil {
-		log.Fatalf("failed to initialize validator: %v", err)
+		slog.Error("failed to initialize validator", "error", err)
+		os.Exit(1)
 	}
 
 	s := grpc.NewServer(grpc.UnaryInterceptor(middlewares.ValidationInterceptor(validator)))
 
-	auth.RegisterAuthServiceServer(s, controller.AuthController(controller.AuthControllerParams{
+	auth.RegisterAuthServiceServer(s, controller.NewServer(controller.ServerParams{
 		Postgres: database.Postgres,
 	}))
 
@@ -49,14 +52,14 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("gRPC server listening at %v", lis.Addr())
+		slog.Info("gRPC server listening", "address", lis.Addr())
 		if err := s.Serve(lis); err != nil {
-			log.Printf("Server error: %v", err)
+			slog.Error("Server error", "error", err)
 		}
 	}()
 
 	<-quit
-	log.Println("Interrupt received. Starting graceful shutdown...")
+	slog.Info("Interrupt received. Starting graceful shutdown...")
 
 	stopped := make(chan struct{})
 	go func() {
@@ -66,11 +69,11 @@ func main() {
 
 	select {
 	case <-time.After(5 * time.Second):
-		log.Println("Timeout reached (5s). Forcing server shutdown...")
+		slog.Info("Timeout reached (5s). Forcing server shutdown...")
 		s.Stop()
 	case <-stopped:
-		log.Println("Server gracefully stopped within timeout.")
+		slog.Info("Server gracefully stopped within timeout.")
 	}
 
-	log.Println("Shutdown complete. Exiting main...")
+	slog.Info("Shutdown complete. Exiting main...")
 }

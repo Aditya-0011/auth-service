@@ -4,9 +4,9 @@ import (
 	"auth/db"
 	"auth/utils"
 	"context"
-	"log"
+	"log/slog"
 
-	auth "github.com/Aditya-0011/common/contracts/go"
+	auth "github.com/Aditya-0011/common/contracts/go/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -17,12 +17,12 @@ type (
 		postgres *db.PostgresParams
 	}
 
-	AuthControllerParams struct {
+	ServerParams struct {
 		Postgres *db.PostgresParams
 	}
 )
 
-func AuthController(params AuthControllerParams) *server {
+func NewServer(params ServerParams) *server {
 	return &server{
 		postgres: params.Postgres,
 	}
@@ -46,14 +46,14 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 	`
 	err := s.postgres.Pool.QueryRow(ctx, query, req.Email).Scan(&count, &id, &password)
 	if err != nil {
-		log.Printf("error querying database: %v", err)
+		slog.Error("error querying database", "error", err)
 		return nil, status.Errorf(codes.Internal, "internal server error")
 	}
 
 	if count == 0 {
 		hashedPassword, err := utils.GenerateHash(req.Password)
 		if err != nil {
-			log.Printf("error generating hash: %v", err)
+			slog.Error("error generating hash", "error", err)
 			return nil, status.Errorf(codes.Internal, "error generating hash")
 		}
 
@@ -64,7 +64,7 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 
 		err = s.postgres.Pool.QueryRow(ctx, "select * from account.create($1, $2)", req.Email, hashedPassword).Scan(&newId, &outcode)
 		if err != nil {
-			log.Printf("error creating user: %v", err)
+			slog.Error("error creating user", "error", err)
 			return nil, status.Errorf(codes.Internal, "error creating user")
 		}
 
@@ -81,13 +81,13 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 
 	} else {
 		if id == nil || password == nil {
-			log.Printf("invalid email provided")
+			slog.Error("invalid email provided")
 			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
 		}
 
 		match, err := utils.ComparePassword(req.Password, *password)
 		if err != nil {
-			log.Printf("error verifying password: %v", err)
+			slog.Error("error verifying password", "error", err)
 			return nil, status.Errorf(codes.Internal, "error verifying password")
 		}
 
