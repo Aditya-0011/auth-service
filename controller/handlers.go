@@ -6,7 +6,7 @@ import (
 	"context"
 	"log"
 
-	auth "github.com/Aditya-0011/common/protos/contracts/go"
+	auth "github.com/Aditya-0011/common/contracts/go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
