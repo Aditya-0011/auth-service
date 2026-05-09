@@ -27,7 +27,7 @@ jobs:
         env:
           GOPRIVATE: "github.com/Aditya-0011/*"
         run: |
-          go get github.com/Aditya-0011/common/protos@latest
+          go get github.com/Aditya-0011/common/contracts/go@latest
           go mod tidy
           GOOS=linux GOARCH=arm64 go build -ldflags "-s -w" -o auth main.go
 
