@@ -4,7 +4,7 @@ go 1.25.3
 
 require (
 	buf.build/go/protovalidate v1.1.3
-	github.com/Aditya-0011/common/contracts/go v0.0.0-20260509180743-ea98c3094d3e
+	github.com/Aditya-0011/common/contracts/go v0.0.0-20260514184603-8b58e13cbbcf
 	github.com/jackc/pgx/v5 v5.9.1
 	golang.org/x/crypto v0.47.0
 	google.golang.org/grpc v1.80.0
@@ -27,5 +27,3 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260120221211-b8f7ae30c516 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
 )
-
-

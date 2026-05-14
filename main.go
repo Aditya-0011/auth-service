@@ -4,6 +4,8 @@ import (
 	"auth/controller"
 	"auth/db"
 	"auth/middlewares"
+	"auth/utils"
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -18,7 +20,13 @@ import (
 )
 
 func main() {
-	database, err := db.Setup()
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	setupCtx, setupCancel := context.WithTimeout(context.Background(), utils.TimeoutDuration)
+	defer setupCancel()
+
+	database, err := db.Setup(setupCtx)
 	if err != nil {
 		slog.Error("Failed to setup databases", "error", err)
 		os.Exit(1)
@@ -51,14 +59,23 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
+	errChan := make(chan error, 1)
+
 	go func() {
 		slog.Info("gRPC server listening", "address", lis.Addr())
 		if err := s.Serve(lis); err != nil {
-			slog.Error("Server error", "error", err)
+			errChan <- err
 		}
 	}()
 
-	<-quit
+	select {
+	case <-quit:
+		slog.Info("Interrupt received. Starting graceful shutdown...")
+	case err := <-errChan:
+		slog.Error("gRPC server failed", "error", err)
+		slog.Info("Starting graceful shutdown due to server error...")
+	}
+
 	slog.Info("Interrupt received. Starting graceful shutdown...")
 
 	stopped := make(chan struct{})
