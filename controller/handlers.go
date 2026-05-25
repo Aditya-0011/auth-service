@@ -5,10 +5,14 @@ import (
 	"auth/utils"
 	"context"
 	"log/slog"
+	"time"
 
 	auth "github.com/Aditya-0011/common/contracts/go/auth"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type (
@@ -97,4 +101,89 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 
 		return &auth.LoginResponse{UserId: int32(*id), UserEmail: req.GetEmail()}, nil
 	}
+}
+
+func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyResponse, error) {
+	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
+	defer cancel()
+
+	var (
+		key       *uuid.UUID
+		updatedAt time.Time
+	)
+
+	query := `
+		select key, updatedAt from account.creds where id = $1
+	`
+
+	err := s.postgres.Pool.QueryRow(ctx, query, req.GetUserId()).Scan(&key, &updatedAt)
+	if err != nil {
+		slog.Error("error querying database", "error", err)
+		return nil, status.Errorf(codes.Internal, "internal server error")
+	}
+
+	if key == nil {
+		return nil, status.Errorf(codes.NotFound, "key not found")
+	}
+
+	return &auth.GetKeyResponse{
+		Key:       key.String(),
+		UpdatedAt: timestamppb.New(updatedAt),
+	}, nil
+}
+
+func (s *server) RotateKey(c context.Context, req *auth.KeyRequest) (*auth.RotateKeyResponse, error) {
+	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
+	defer cancel()
+
+	var outcode int8
+
+	query := `
+		select outcode from account.rotate_key(@id)
+	`
+
+	queryParams := pgx.NamedArgs{
+		"id": req.GetUserId(),
+	}
+
+	err := s.postgres.Pool.QueryRow(ctx, query, queryParams).Scan(&outcode)
+	if err != nil {
+		slog.Error("error rotating key", "userId", req.GetUserId(), "error", err)
+		return nil, status.Errorf(codes.Internal, "error rotating key")
+	}
+
+	switch outcode {
+	case -1:
+		return &auth.RotateKeyResponse{Message: "Key rotated successfully"}, nil
+	case 1:
+		return nil, status.Errorf(codes.NotFound, "user not found")
+	default:
+		return nil, status.Errorf(codes.Internal, "error rotating user")
+	}
+}
+
+func (s *server) ValidateKey(c context.Context, req *auth.ValidateKeyRequest) (*auth.LoginResponse, error) {
+	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
+	defer cancel()
+
+	var (
+		userId *int
+		email  *string
+	)
+
+	query := `
+		select id, email from account.creds where key = $1
+	`
+	err := s.postgres.Pool.QueryRow(ctx, query, req.GetKey()).Scan(&userId, &email)
+	if err != nil {
+		slog.Error("error validating key", "key", req.GetKey(), "error", err)
+		return nil, status.Errorf(codes.Internal, "error validating key")
+	}
+
+	if userId == nil || email == nil {
+		return nil, status.Errorf(codes.NotFound, "key not found")
+	}
+
+	return &auth.LoginResponse{UserId: int32(*userId), UserEmail: *email}, nil
+
 }
