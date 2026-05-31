@@ -106,12 +106,13 @@ infrastructure/
 
 The service implements a gRPC interface focused strictly on identity and authentication:
 - **Login / Registration**: Initializing the admin identity or authenticating existing credentials.
-- **Key Validation**: Confirming the active state of UUID-based API keys.
+- **Key Validation**: Confirming the active state of securely generated, prefixed API keys.
 - **Key Rotation**: Securely invalidating and rolling over API credentials.
 
 ## Database Architecture
 
-The auth service leverages PostgreSQL with a strong focus on the principle of least privilege.
+The auth service leverages PostgreSQL with a strong focus on the principle of least privilege and cryptographic security.
 - **Dedicated Schema**: It operates under the `account` schema, managing the `creds` table.
+- **Secure Key Generation**: Uses the `pgcrypto` extension to generate secure, prefixed API keys directly within the database layer.
 - **Restricted Access**: The backend application connects using the `auth_service` database role, which does **not** have direct `INSERT`, `UPDATE`, or `DELETE` permissions on tables.
-- **Stored Procedures**: All writes to the database (such as user creation or key rotation) are strictly executed through securely defined stored functions (`account.create`, `account.rotate_key`).
+- **Stored Procedures**: All writes to the database (such as user creation or key rotation) are strictly executed through securely defined stored functions (`account.create`, `account.rotate_key`) leveraging row-level locking (`FOR UPDATE`).

@@ -7,8 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	auth "github.com/Aditya-0011/common/contracts/go/auth"
-	"github.com/google/uuid"
+	"github.com/Aditya-0011/common/contracts/go/auth"
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -108,7 +107,7 @@ func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyRe
 	defer cancel()
 
 	var (
-		key       *uuid.UUID
+		key       string
 		updatedAt time.Time
 	)
 
@@ -122,12 +121,12 @@ func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyRe
 		return nil, status.Errorf(codes.Internal, "internal server error")
 	}
 
-	if key == nil {
+	if key == "" {
 		return nil, status.Errorf(codes.NotFound, "key not found")
 	}
 
 	return &auth.GetKeyResponse{
-		Key:       key.String(),
+		Key:       key,
 		UpdatedAt: timestamppb.New(updatedAt),
 	}, nil
 }
