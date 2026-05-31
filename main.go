@@ -85,7 +85,7 @@ func main() {
 	}()
 
 	select {
-	case <-time.After(5 * time.Second):
+	case <-time.After(utils.TimeoutDuration):
 		slog.Info("Timeout reached (5s). Forcing server shutdown...")
 		s.Stop()
 	case <-stopped:

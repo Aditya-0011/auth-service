@@ -1,10 +1,10 @@
 package db
 
 import (
+	"auth/utils"
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -14,7 +14,7 @@ type PostgresParams struct {
 }
 
 func connectPostgres(c context.Context, url string) (*PostgresParams, error) {
-	ctx, cancel := context.WithTimeout(c, 5*time.Second)
+	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
 	defer cancel()
 
 	pool, err := pgxpool.New(ctx, url)
