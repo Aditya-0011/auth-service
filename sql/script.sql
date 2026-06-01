@@ -25,7 +25,7 @@ create index idx_creds_key on account.creds(key);
 create or replace function account.generate_key(out key text)
 as $$
 begin
-    key := 'pt_api_' || encode(gen_random_bytes(24), 'hex');
+    key := 'pk_' || encode(gen_random_bytes(24), 'hex');
 end;
 $$ language plpgsql security definer;
 
