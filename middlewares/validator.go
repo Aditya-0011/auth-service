@@ -15,7 +15,7 @@ func ValidationInterceptor(validator protovalidate.Validator) grpc.UnaryServerIn
 
 		if msg, ok := req.(protoreflect.ProtoMessage); ok {
 			if err := validator.Validate(msg); err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "validation failed: %v", err)
+				return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 			}
 		}
 

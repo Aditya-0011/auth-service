@@ -50,14 +50,14 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 	err := s.postgres.Pool.QueryRow(ctx, query, req.GetEmail()).Scan(&count, &id, &password)
 	if err != nil {
 		slog.Error("error querying database", "error", err)
-		return nil, status.Errorf(codes.Internal, "internal server error")
+		return nil, status.Errorf(codes.Internal, "Internal server error")
 	}
 
 	if count == 0 {
 		hashedPassword, err := utils.GenerateHash(req.GetPassword())
 		if err != nil {
 			slog.Error("error generating hash", "error", err)
-			return nil, status.Errorf(codes.Internal, "error generating hash")
+			return nil, status.Errorf(codes.Internal, "Error generating hash")
 		}
 
 		var (
@@ -68,34 +68,34 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 		err = s.postgres.Pool.QueryRow(ctx, "select * from account.create($1, $2)", req.GetEmail(), hashedPassword).Scan(&newId, &outcode)
 		if err != nil {
 			slog.Error("error creating user", "error", err)
-			return nil, status.Errorf(codes.Internal, "error creating user")
+			return nil, status.Errorf(codes.Internal, "Error creating user")
 		}
 
 		switch outcode {
 		case -1:
 			return &auth.LoginResponse{UserId: int32(newId), UserEmail: req.GetEmail()}, nil
 		case 0: //currently only supports single user - Aditya Punmiya
-			return nil, status.Errorf(codes.NotFound, "user not found") //return nil, status.Errorf(codes.AlreadyExists, "user already exists")
+			return nil, status.Errorf(codes.NotFound, "User not found") //return nil, status.Errorf(codes.AlreadyExists, "user already exists")
 		case 1:
-			return nil, status.Errorf(codes.NotFound, "user not found")
+			return nil, status.Errorf(codes.NotFound, "User not found")
 		default:
-			return nil, status.Errorf(codes.Internal, "error creating user")
+			return nil, status.Errorf(codes.Internal, "Error creating user")
 		}
 
 	} else {
 		if id == nil || password == nil {
 			slog.Error("invalid email provided")
-			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
+			return nil, status.Errorf(codes.Unauthenticated, "Invalid credentials")
 		}
 
 		match, err := utils.ComparePassword(req.GetPassword(), *password)
 		if err != nil {
 			slog.Error("error verifying password", "error", err)
-			return nil, status.Errorf(codes.Internal, "error verifying password")
+			return nil, status.Errorf(codes.Internal, "Error verifying password")
 		}
 
 		if !match {
-			return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
+			return nil, status.Errorf(codes.Unauthenticated, "Invalid credentials")
 		}
 
 		return &auth.LoginResponse{UserId: int32(*id), UserEmail: req.GetEmail()}, nil
@@ -118,11 +118,11 @@ func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyRe
 	err := s.postgres.Pool.QueryRow(ctx, query, req.GetUserId()).Scan(&key, &updatedAt)
 	if err != nil {
 		slog.Error("error querying database", "error", err)
-		return nil, status.Errorf(codes.Internal, "internal server error")
+		return nil, status.Errorf(codes.Internal, "Internal server error")
 	}
 
 	if key == "" {
-		return nil, status.Errorf(codes.NotFound, "key not found")
+		return nil, status.Errorf(codes.NotFound, "Key not found")
 	}
 
 	return &auth.GetKeyResponse{
@@ -148,16 +148,16 @@ func (s *server) RotateKey(c context.Context, req *auth.KeyRequest) (*auth.Rotat
 	err := s.postgres.Pool.QueryRow(ctx, query, queryParams).Scan(&outcode)
 	if err != nil {
 		slog.Error("error rotating key", "userId", req.GetUserId(), "error", err)
-		return nil, status.Errorf(codes.Internal, "error rotating key")
+		return nil, status.Errorf(codes.Internal, "Error rotating key")
 	}
 
 	switch outcode {
 	case -1:
 		return &auth.RotateKeyResponse{Message: "Key rotated successfully"}, nil
 	case 1:
-		return nil, status.Errorf(codes.NotFound, "user not found")
+		return nil, status.Errorf(codes.NotFound, "User not found")
 	default:
-		return nil, status.Errorf(codes.Internal, "error rotating user")
+		return nil, status.Errorf(codes.Internal, "Error rotating user")
 	}
 }
 
@@ -176,11 +176,11 @@ func (s *server) ValidateKey(c context.Context, req *auth.ValidateKeyRequest) (*
 	err := s.postgres.Pool.QueryRow(ctx, query, req.GetKey()).Scan(&userId, &email)
 	if err != nil {
 		slog.Error("error validating key", "key", req.GetKey(), "error", err)
-		return nil, status.Errorf(codes.Internal, "error validating key")
+		return nil, status.Errorf(codes.Internal, "Error validating key")
 	}
 
 	if userId == nil || email == nil {
-		return nil, status.Errorf(codes.NotFound, "key not found")
+		return nil, status.Errorf(codes.NotFound, "Key not found")
 	}
 
 	return &auth.LoginResponse{UserId: int32(*userId), UserEmail: *email}, nil
