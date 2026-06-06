@@ -1,0 +1,12 @@
+.git/
+.github/
+.agents/
+.vscode/
+.air.toml
+.ps1
+skills-lock.json
+.env
+.env.*
+tmp/
+README.md
+.gitignore
