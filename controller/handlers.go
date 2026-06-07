@@ -131,7 +131,7 @@ func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyRe
 	}, nil
 }
 
-func (s *server) RotateKey(c context.Context, req *auth.KeyRequest) (*auth.RotateKeyResponse, error) {
+func (s *server) RotateKey(c context.Context, req *auth.KeyRequest) (*auth.SimpleResponse, error) {
 	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
 	defer cancel()
 
@@ -153,7 +153,7 @@ func (s *server) RotateKey(c context.Context, req *auth.KeyRequest) (*auth.Rotat
 
 	switch outcode {
 	case -1:
-		return &auth.RotateKeyResponse{Message: "Key rotated successfully"}, nil
+		return &auth.SimpleResponse{Message: "Key rotated successfully"}, nil
 	case 1:
 		return nil, status.Errorf(codes.NotFound, "User not found")
 	default:
