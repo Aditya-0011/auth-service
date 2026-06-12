@@ -1,6 +1,6 @@
 # Auth Service
 
-A reliable and scalable gRPC authentication service written in Go.
+A highly secure, strictly-typed gRPC authentication service tailored for personal platform management.
 
 [![Go Version](https://img.shields.io/badge/Go->=1.25-00ADD8?style=flat-square&logo=go)](https://go.dev)
 [![gRPC](https://img.shields.io/badge/gRPC-API-244c5a?style=flat-square&logo=grpc)](https://grpc.io)
@@ -8,9 +8,7 @@ A reliable and scalable gRPC authentication service written in Go.
 
 ## Overview
 
-The Auth Service is a core infrastructure microservice responsible for handling user authentication and API key lifecycle management. It acts as the gatekeeper for identity within the platform, exposing a strictly-typed gRPC API that other microservices can consume. Built with Go, it emphasizes high performance, secure defaults, and robust error handling.
-
-This service utilizes PostgreSQL as its source of truth, managing passwords securely with hashing and exposing API keys that can be rotated dynamically via stored procedures.
+The Auth Service acts as the Identity Provider (IdP) for the developer platform. The architecture is built to be scalable for multiple users, but is currently restricted to a single platform owner in the implementation to minimize infrastructure overhead. It provides the mechanism to securely log into the admin console via Redis sessions and manages the lifecycle of long-lived API keys (`pk_...`) used by external applications to access the portfolio data.
 
 ## Architecture & Tech Stack
 
@@ -23,37 +21,37 @@ This service utilizes PostgreSQL as its source of truth, managing passwords secu
 
 ```text
 .
-├── controller/    # Contains the gRPC server implementation and business logic (handlers.go)
-├── db/            # PostgreSQL connection management and pool setup (postgres.go, setup.go)
+├── controller/    # Contains the gRPC server implementation and business logic
+├── db/            # PostgreSQL connection management and pool setup
 ├── middlewares/   # gRPC interceptors, including payload validation
 ├── sql/           # Schema definitions, stored procedures, and role grants
-├── utils/         # Helper functions for password hashing, comparison, and timeouts
+├── utils/         # Helper functions for password hashing and timeouts
 ├── main.go        # Application entrypoint and dependency wiring
 └── go.mod         # Dependency management
 ```
 
 ## Features
 
-- 🔐 **Authentication & Registration**: Secure login flow. Automatically registers a user if the database is empty.
-- 🔑 **API Key Management**: Retrieve, validate, and securely rotate API keys.
+- 🔐 **Scalable Identity**: Secure login flow. The system is architecturally capable of multi-tenancy but is currently implemented with a single-user restriction *(via an initial registration constraint)*.
+- 🔑 **API Key Management**: Retrieve, validate, and securely rotate active API keys.
 - 🛡️ **Payload Validation**: Automatically rejects malformed requests before they hit the controller using `protovalidate` interceptors.
-- ⚡ **Connection Pooling**: Reuses database connections effectively via `pgxpool`.
 - 🚦 **Graceful Shutdown**: Intercepts `SIGTERM` and `SIGINT`, allows ongoing requests to finish, and safely closes database connections.
 - 🔒 **Secure Hash Algorithms**: Uses `golang.org/x/crypto` for secure password comparison and hashing.
 
 ## API Summary
 
 The service implements a gRPC interface focused strictly on identity and authentication:
-- **Login / Registration**: Initializing the admin identity or authenticating existing credentials.
+- **Login / Registration**: Initializing the single admin identity or authenticating existing credentials.
 - **Key Validation**: Confirming the active state of securely generated, prefixed API keys.
 - **Key Rotation**: Securely invalidating and rolling over API credentials.
 
 ## Database Architecture
 
-- **Dedicated Schema**: Operates under the `account` schema, managing the `creds` table.
-- **Secure Key Generation**: Uses the `pgcrypto` extension to generate secure, prefixed API keys directly within the database layer.
-- **Restricted Access**: Connects using the `auth_service` database role, which does **not** have direct `INSERT`, `UPDATE`, or `DELETE` permissions on tables.
-- **Stored Procedures**: All writes to the database are strictly executed through securely defined stored functions (e.g., `account.create`).
+The auth service leverages PostgreSQL with a strong focus on the principle of least privilege and cryptographic security.
+- **Dedicated Schema**: It operates under the `account` schema, managing the `creds` table.
+- **Secure Key Generation**: Uses the `pgcrypto` extension to generate secure, prefixed API keys (`pk_...`) directly within the database layer.
+- **Restricted Access**: The backend application connects using the `auth_service` database role, which does **not** have direct `INSERT`, `UPDATE`, or `DELETE` permissions on tables.
+- **Stored Procedures**: All writes to the database (such as user creation or key rotation) are strictly executed through securely defined stored functions (`account.create`, `account.rotate_key`).
 
 ## Getting Started
 
