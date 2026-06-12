@@ -10,6 +10,8 @@ github.com/Aditya-0011/common/contracts/go v0.0.0-20260607170641-425a25b048a0 h1
 github.com/Aditya-0011/common/contracts/go v0.0.0-20260607170641-425a25b048a0/go.mod h1:d1CSn+dSbXUQNhL/WppwfJWo3HQ97OkOugdA4XqZOOs=
 github.com/Aditya-0011/common/contracts/go v0.0.0-20260607171251-50cf5ae47839 h1:NwYeSsHXWKREN4haQMZzMH6eHhDgaQtcCkuV1qYXy5Y=
 github.com/Aditya-0011/common/contracts/go v0.0.0-20260607171251-50cf5ae47839/go.mod h1:d1CSn+dSbXUQNhL/WppwfJWo3HQ97OkOugdA4XqZOOs=
+github.com/Aditya-0011/common/contracts/go v0.0.0-20260610194507-22d4a328a1bf h1:+J7gq2upk3P3jaXnXFfO7qfvlQFnzruR3OE1Ks2EPYY=
+github.com/Aditya-0011/common/contracts/go v0.0.0-20260610194507-22d4a328a1bf/go.mod h1:d1CSn+dSbXUQNhL/WppwfJWo3HQ97OkOugdA4XqZOOs=
 github.com/antlr4-go/antlr/v4 v4.13.1 h1:SqQKkuVZ+zWkMMNkjy5FZe5mr5WURWnlpmOuzYWrPrQ=
 github.com/antlr4-go/antlr/v4 v4.13.1/go.mod h1:GKmUxMtwp6ZgGwZSva4eWPC5mS6vUAmOABFgjdkM7Nw=
 github.com/brianvoe/gofakeit/v6 v6.28.0 h1:Xib46XXuQfmlLS2EXRuJpqcw8St6qSZz75OUo0tgAW4=
