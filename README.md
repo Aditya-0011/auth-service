@@ -1,21 +1,14 @@
-<div align="center">
-
 # Auth Service
-*A reliable and scalable gRPC authentication service written in Go*
+
+A reliable and scalable gRPC authentication service written in Go.
 
 [![Go Version](https://img.shields.io/badge/Go->=1.25-00ADD8?style=flat-square&logo=go)](https://go.dev)
 [![gRPC](https://img.shields.io/badge/gRPC-API-244c5a?style=flat-square&logo=grpc)](https://grpc.io)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
 
-⭐ If you find this service useful, please star the repository!
-
-[Overview](#overview) • [Architecture & Tech Stack](#architecture--tech-stack) • [Features](#features) • [Getting Started](#getting-started) • [Polyrepo Local Setup](#polyrepo-local-setup) • [API Summary](#api-summary) • [Database Architecture](#database-architecture)
-
-</div>
-
 ## Overview
 
-The **Auth Service** is a core infrastructure microservice responsible for handling user authentication and API key lifecycle management. It acts as the gatekeeper for identity within the platform, exposing a strictly-typed gRPC API that other microservices can consume. Built with Go, it emphasizes high performance, secure defaults, and robust error handling.
+The Auth Service is a core infrastructure microservice responsible for handling user authentication and API key lifecycle management. It acts as the gatekeeper for identity within the platform, exposing a strictly-typed gRPC API that other microservices can consume. Built with Go, it emphasizes high performance, secure defaults, and robust error handling.
 
 This service utilizes PostgreSQL as its source of truth, managing passwords securely with hashing and exposing API keys that can be rotated dynamically via stored procedures.
 
@@ -25,7 +18,6 @@ This service utilizes PostgreSQL as its source of truth, managing passwords secu
 - **Database Driver**: Uses `github.com/jackc/pgx/v5/pgxpool` for high-performance PostgreSQL connection pooling.
 - **Validation**: Payload validation happens implicitly at the gRPC interceptor level using `buf.build/go/protovalidate`.
 - **Logging**: Idiomatic structured logging is implemented via `log/slog`.
-- **Contracts**: Shares proto definitions through a common Go module (`github.com/Aditya-0011/common/contracts/go/auth`).
 
 ### Project Structure
 
@@ -42,65 +34,12 @@ This service utilizes PostgreSQL as its source of truth, managing passwords secu
 
 ## Features
 
-- 🔐 **Authentication & Registration**: Secure login flow. Automatically registers a user if the database is empty (currently limited to a single administrative user setup).
+- 🔐 **Authentication & Registration**: Secure login flow. Automatically registers a user if the database is empty.
 - 🔑 **API Key Management**: Retrieve, validate, and securely rotate API keys.
 - 🛡️ **Payload Validation**: Automatically rejects malformed requests before they hit the controller using `protovalidate` interceptors.
 - ⚡ **Connection Pooling**: Reuses database connections effectively via `pgxpool`.
-- 🚦 **Graceful Shutdown**: Intercepts `SIGTERM` and `SIGINT`, allows ongoing requests to finish, and safely closes database connections with a hard timeout fallback of 5 seconds.
+- 🚦 **Graceful Shutdown**: Intercepts `SIGTERM` and `SIGINT`, allows ongoing requests to finish, and safely closes database connections.
 - 🔒 **Secure Hash Algorithms**: Uses `golang.org/x/crypto` for secure password comparison and hashing.
-
-## Getting Started
-
-### Prerequisites
-
-- [Go](https://go.dev/dl/) 1.25 or higher
-- A running [PostgreSQL](https://www.postgresql.org/download/) 18+ database instance
-- The `common` contracts module (see Polyrepo setup below).
-
-### Installation
-
-Clone the repository:
-```bash
-git clone https://github.com/Aditya-0011/auth-service.git auth
-cd auth
-go mod tidy
-```
-
-### Configuration
-
-The service relies on environment variables for configuration. You can export these directly in your shell or place them in a `.env` file at the root of the project.
-
-| Variable | Description | Default | Required |
-| :--- | :--- | :--- | :---: |
-| `POSTGRES_URL` | Connection string for the PostgreSQL database (e.g. `postgres://user:pass@host/db`) | - | **Yes** |
-| `PORT` | The port on which the gRPC server will listen | `7295` | No |
-
-### Running the Service
-
-For standard execution, use the Go CLI:
-
-```bash
-go run main.go
-```
-
-> [!TIP]
-> If you are working in a local development environment, you might have the `run.ps1` script configured with [Air](https://github.com/cosmtrek/air) for live-reloading. You can execute `./run.ps1` to automatically rebuild the server on code changes.
-
-## Polyrepo Local Setup
-
-This project uses a polyrepo architecture. The `auth` service is in its own repository, but it depends on the schemas defined in the `common` repository.
-
-> [!IMPORTANT]
-> When developing locally, keep all repositories (`common`, `auth`, `manager`) in the same parent folder. Use a Go Workspace file (`go.work`) in the parent directory to safely resolve the local `common` module without altering `go.mod` files.
-
-Example local setup:
-```text
-infrastructure/
-├── common/
-├── auth/
-├── manager/
-└── go.work # Should include 'use ./common', 'use ./auth', 'use ./manager'
-```
 
 ## API Summary
 
@@ -111,8 +50,84 @@ The service implements a gRPC interface focused strictly on identity and authent
 
 ## Database Architecture
 
-The auth service leverages PostgreSQL with a strong focus on the principle of least privilege and cryptographic security.
-- **Dedicated Schema**: It operates under the `account` schema, managing the `creds` table.
+- **Dedicated Schema**: Operates under the `account` schema, managing the `creds` table.
 - **Secure Key Generation**: Uses the `pgcrypto` extension to generate secure, prefixed API keys directly within the database layer.
-- **Restricted Access**: The backend application connects using the `auth_service` database role, which does **not** have direct `INSERT`, `UPDATE`, or `DELETE` permissions on tables.
-- **Stored Procedures**: All writes to the database (such as user creation or key rotation) are strictly executed through securely defined stored functions (`account.create`, `account.rotate_key`) leveraging row-level locking (`FOR UPDATE`).
+- **Restricted Access**: Connects using the `auth_service` database role, which does **not** have direct `INSERT`, `UPDATE`, or `DELETE` permissions on tables.
+- **Stored Procedures**: All writes to the database are strictly executed through securely defined stored functions (e.g., `account.create`).
+
+## Getting Started
+
+### Prerequisites
+
+- [Go](https://go.dev/dl/) 1.25 or higher
+- A running [PostgreSQL](https://www.postgresql.org/download/) 18+ database instance
+- Protocol buffer compilation tools (e.g., `buf`) if modifying definitions.
+
+### Configuration
+
+The service relies on environment variables for configuration. You should export these directly in your shell environment.
+
+| Variable | Description | Default | Required |
+| :--- | :--- | :--- | :---: |
+| `POSTGRES_URL` | Connection string for the PostgreSQL database | - | **Yes** |
+| `PORT` | The port on which the gRPC server will listen | `7295` | No |
+
+### Polyrepo Local Setup
+
+This project uses a polyrepo architecture. Services like `auth`, `manager`, and `gateway` rely on the `common` repository. To run this locally without dependency errors, clone all repositories side-by-side into the same parent directory so that relative paths resolve correctly.
+
+Example local setup:
+```text
+infrastructure/
+├── common/
+├── auth/
+├── manager/
+└── gateway/
+```
+
+### Running the Service
+
+For standard execution, use the Go CLI:
+
+```bash
+go run main.go
+```
+
+#### Hot Reloading for Local Development
+
+To watch for file changes and automatically rebuild and restart the server, you can use [air](https://github.com/cosmtrek/air). Since `air` is written purely in Go, it compiles to a single binary and runs natively on Windows, macOS, and Linux without any OS-specific shell scripts.
+
+```bash
+go install github.com/air-verse/air@latest
+air
+```
+
+## CI/CD & Production Deployment
+
+The service is fully containerized and leverages GitHub Actions (`.github/workflows/main.yml`) for automated builds and deployment.
+
+### 1. Server Initialization
+Before the CI/CD pipeline can deploy the application for the first time, you must initialize the host environment on your VM.
+
+Create the shared network that the containers will use to communicate:
+```bash
+podman network create infra-network
+```
+
+Create the environment variable configuration file:
+```bash
+touch ~/auth-service-production.conf
+# Edit the file to include your POSTGRES_URL
+```
+
+### 2. Automated Build (GHCR)
+The workflow uses Docker Buildx with QEMU to cross-compile a `linux/arm64` container image. 
+Because the project depends on private GitHub modules (`common`), the workflow injects a `PAT_TOKEN` secret during the build stage to securely download the private contracts. The resulting image is pushed to the GitHub Container Registry (`ghcr.io/aditya-0011/auth-service`).
+
+### 3. Production Execution (Podman)
+In production, the service is deployed to a remote Linux VM using **Podman**. The CI pipeline automatically SSHs into the server, pulls the latest GHCR image, and seamlessly swaps the running container.
+
+The container is orchestrated with the following constraints:
+- Attached to the shared internal network (`--network infra-network`).
+- Reads configuration purely from the host-level environment file (`--env-file ~/auth-service-production.conf`).
+- Configured to restart automatically (`--restart unless-stopped`).
