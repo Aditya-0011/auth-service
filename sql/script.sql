@@ -16,11 +16,11 @@ create schema if not exists account;
 create table if not exists account.creds (
     id int primary key,
     email varchar(100) not null unique,
-    password varchar(100) not null,
+    password bytea not null,
     key text not null unique,
     updatedAt timestamptz default now()
 );
-create index idx_creds_key on account.creds(key);
+create index idx_creds_key on account.creds using hash (key);
 
 create or replace function account.generate_key(out key text)
 as $$
@@ -31,7 +31,7 @@ $$ language plpgsql security definer;
 
 create or replace function account.create(
     in p_email varchar, 
-    in p_password varchar, 
+    in p_password bytea, 
     out id int,
     out outcode smallint)
 as $$
@@ -51,14 +51,21 @@ $$ language plpgsql security definer;
 
 create or replace function account.rotate_key(in p_id int, out outcode smallint)
 as $$
+declare
+    rows_affected int;
 begin
-    if exists (select 1 from account.creds where id = p_id for update) then
-        update account.creds set key = account.generate_key(), updatedAt = now() where id = p_id;
-        outcode := -1;
-    else
+    update account.creds
+        set key = account.generate_key(), updatedAt = now()
+        where id = p_id;
+
+    get diagnostics rows_affected = row_count;
+
+    if rows_affected = 0 then
         outcode := 1;
+    else
+        outcode := -1;
     end if;
-exception 
+exception
     when others then
         outcode := 2;
 end;
@@ -71,7 +78,7 @@ grant usage on schema public to auth_service;
 grant usage on schema account to auth_service;
 grant select on table account.creds to auth_service;
 grant execute on function 
-    account.create (varchar, varchar),
+    account.create (varchar, bytea),
     account.rotate_key(int)
 to auth_service;
 revoke insert, update, delete on account.creds from auth_service;

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Aditya-0011/common/contracts/go/auth"
-	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -32,13 +31,13 @@ func NewServer(params ServerParams) *server {
 }
 
 func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
-	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
+	ctx, cancel := utils.WithDeadline(c, utils.TimeoutDuration)
 	defer cancel()
 
 	var (
 		count    int
 		id       *int
-		password *string
+		password *[]byte
 	)
 
 	query := `
@@ -49,14 +48,16 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 	`
 	err := s.postgres.Pool.QueryRow(ctx, query, req.GetEmail()).Scan(&count, &id, &password)
 	if err != nil {
-		slog.Error("error querying database", "error", err)
+		slog.LogAttrs(ctx, slog.LevelError, "error querying database",
+			slog.String("error", err.Error()))
 		return nil, status.Errorf(codes.Internal, "Internal server error")
 	}
 
 	if count == 0 {
-		hashedPassword, err := utils.GenerateHash(req.GetPassword())
+		hashedPassword, err := utils.GenerateHash([]byte(req.GetPassword()))
 		if err != nil {
-			slog.Error("error generating hash", "error", err)
+			slog.LogAttrs(ctx, slog.LevelError, "error generating hash",
+				slog.String("error", err.Error()))
 			return nil, status.Errorf(codes.Internal, "Error generating hash")
 		}
 
@@ -67,15 +68,16 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 
 		err = s.postgres.Pool.QueryRow(ctx, "select * from account.create($1, $2)", req.GetEmail(), hashedPassword).Scan(&newId, &outcode)
 		if err != nil {
-			slog.Error("error creating user", "error", err)
+			slog.LogAttrs(ctx, slog.LevelError, "error creating user",
+				slog.String("error", err.Error()))
 			return nil, status.Errorf(codes.Internal, "Error creating user")
 		}
 
 		switch outcode {
 		case -1:
 			return &auth.LoginResponse{UserId: int32(newId), UserEmail: req.GetEmail()}, nil
-		case 0: //currently only supports single user - Aditya Punmiya
-			return nil, status.Errorf(codes.NotFound, "User not found") //return nil, status.Errorf(codes.AlreadyExists, "user already exists")
+		case 0: // currently only supports single user - Aditya Punmiya
+			return nil, status.Errorf(codes.NotFound, "User not found")
 		case 1:
 			return nil, status.Errorf(codes.NotFound, "User not found")
 		default:
@@ -84,13 +86,14 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 
 	} else {
 		if id == nil || password == nil {
-			slog.Error("invalid email provided")
+			slog.LogAttrs(ctx, slog.LevelError, "invalid email provided")
 			return nil, status.Errorf(codes.Unauthenticated, "Invalid credentials")
 		}
 
-		match, err := utils.ComparePassword(req.GetPassword(), *password)
+		match, err := utils.ComparePassword([]byte(req.GetPassword()), *password)
 		if err != nil {
-			slog.Error("error verifying password", "error", err)
+			slog.LogAttrs(ctx, slog.LevelError, "error verifying password",
+				slog.String("error", err.Error()))
 			return nil, status.Errorf(codes.Internal, "Error verifying password")
 		}
 
@@ -103,7 +106,7 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 }
 
 func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyResponse, error) {
-	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
+	ctx, cancel := utils.WithDeadline(c, utils.TimeoutDuration)
 	defer cancel()
 
 	var (
@@ -111,13 +114,12 @@ func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyRe
 		updatedAt time.Time
 	)
 
-	query := `
-		select key, updatedAt from account.creds where id = $1
-	`
+	query := `select key, updatedAt from account.creds where id = $1`
 
 	err := s.postgres.Pool.QueryRow(ctx, query, req.GetUserId()).Scan(&key, &updatedAt)
 	if err != nil {
-		slog.Error("error querying database", "error", err)
+		slog.LogAttrs(ctx, slog.LevelError, "error querying database",
+			slog.String("error", err.Error()))
 		return nil, status.Errorf(codes.Internal, "Internal server error")
 	}
 
@@ -132,22 +134,16 @@ func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyRe
 }
 
 func (s *server) RotateKey(c context.Context, req *auth.KeyRequest) (*auth.SimpleResponse, error) {
-	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
+	ctx, cancel := utils.WithDeadline(c, utils.TimeoutDuration)
 	defer cancel()
 
 	var outcode int8
 
-	query := `
-		select outcode from account.rotate_key(@id)
-	`
-
-	queryParams := pgx.NamedArgs{
-		"id": req.GetUserId(),
-	}
-
-	err := s.postgres.Pool.QueryRow(ctx, query, queryParams).Scan(&outcode)
+	err := s.postgres.Pool.QueryRow(ctx, `select outcode from account.rotate_key($1)`, req.GetUserId()).Scan(&outcode)
 	if err != nil {
-		slog.Error("error rotating key", "userId", req.GetUserId(), "error", err)
+		slog.LogAttrs(ctx, slog.LevelError, "error rotating key",
+			slog.Int("userId", int(req.GetUserId())),
+			slog.String("error", err.Error()))
 		return nil, status.Errorf(codes.Internal, "Error rotating key")
 	}
 
@@ -162,7 +158,7 @@ func (s *server) RotateKey(c context.Context, req *auth.KeyRequest) (*auth.Simpl
 }
 
 func (s *server) ValidateKey(c context.Context, req *auth.ValidateKeyRequest) (*auth.LoginResponse, error) {
-	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
+	ctx, cancel := utils.WithDeadline(c, utils.TimeoutDuration)
 	defer cancel()
 
 	var (
@@ -170,12 +166,16 @@ func (s *server) ValidateKey(c context.Context, req *auth.ValidateKeyRequest) (*
 		email  *string
 	)
 
-	query := `
-		select id, email from account.creds where key = $1
-	`
+	query := `select id, email from account.creds where key = $1`
 	err := s.postgres.Pool.QueryRow(ctx, query, req.GetKey()).Scan(&userId, &email)
 	if err != nil {
-		slog.Error("error validating key", "key", req.GetKey(), "error", err)
+		keyPrefix := req.GetKey()
+		if len(keyPrefix) > 8 {
+			keyPrefix = keyPrefix[:8]
+		}
+		slog.LogAttrs(ctx, slog.LevelError, "error validating key",
+			slog.String("key_prefix", keyPrefix),
+			slog.String("error", err.Error()))
 		return nil, status.Errorf(codes.Internal, "Error validating key")
 	}
 
@@ -184,5 +184,4 @@ func (s *server) ValidateKey(c context.Context, req *auth.ValidateKeyRequest) (*
 	}
 
 	return &auth.LoginResponse{UserId: int32(*userId), UserEmail: *email}, nil
-
 }

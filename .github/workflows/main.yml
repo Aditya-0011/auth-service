@@ -58,9 +58,11 @@ jobs:
 
             podman run -d \
               --name auth-service \
-              --network infra-network \
+              --network host \
               --env-file ~/auth-service-production.conf \
               --restart unless-stopped \
+              --memory 768m \
+              --cpus 1 \
               ghcr.io/aditya-0011/auth-service:latest
 
             podman image prune -f

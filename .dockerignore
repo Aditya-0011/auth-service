@@ -10,3 +10,4 @@ skills-lock.json
 tmp/
 README.md
 .gitignore
+sql/

@@ -1,77 +1,53 @@
 package utils
 
 import (
-	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"fmt"
-	"strings"
 
 	"golang.org/x/crypto/argon2"
 )
 
-type PasswordConfig struct {
-	time    uint32
-	memory  uint32
-	threads uint8
-	keyLen  uint32
+const (
+	argonTime    uint32 = 1
+	argonMemory  uint32 = 32 * 1024
+	argonThreads uint8  = 1
+	argonKeyLen  uint32 = 32
+	argonSaltLen        = 16
+	argonHashLen        = argonKeyLen + argonSaltLen
+)
+
+var hashSem = make(chan struct{}, 1)
+
+func GenerateHash(password []byte) ([]byte, error) {
+	hashSem <- struct{}{}
+	defer func() { <-hashSem }()
+
+	salt, err := randomBytes(argonSaltLen)
+	if err != nil {
+		return nil, fmt.Errorf("generating salt: %w", err)
+	}
+
+	hash := argon2.IDKey(password, salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+
+	out := make([]byte, argonHashLen)
+	copy(out[:argonSaltLen], salt)
+	copy(out[argonSaltLen:], hash)
+
+	return out, nil
 }
 
-var c = &PasswordConfig{
-	time:    1,
-	memory:  64 * 1024,
-	threads: 4,
-	keyLen:  32,
-}
-
-func GenerateHash(password string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
+func ComparePassword(password, stored []byte) (bool, error) {
+	if len(stored) != int(argonHashLen) {
+		return false, fmt.Errorf("invalid stored hash length: got %d, want %d", len(stored), argonHashLen)
 	}
 
-	hash := argon2.IDKey([]byte(password), salt, c.time, c.memory, c.threads, c.keyLen)
+	salt := stored[:argonSaltLen]
+	expectedHash := stored[argonSaltLen:]
 
-	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
-	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
+	hashSem <- struct{}{}
+	defer func() { <-hashSem }()
 
-	format := "$id$v=%d$m=%d,t=%d,p=%d$%s$%s"
-	fullHash := fmt.Sprintf(format, argon2.Version, c.memory, c.time, c.threads, b64Salt, b64Hash)
+	candidate := argon2.IDKey(password, salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 
-	return fullHash, nil
-}
-
-func ComparePassword(password, hash string) (bool, error) {
-	parts := strings.Split(hash, "$")
-	if len(parts) != 6 {
-		return false, fmt.Errorf("invalid hash format")
-	}
-
-	var memory uint32
-	var time uint32
-	var threads uint8
-
-	_, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads)
-	if err != nil {
-		return false, err
-	}
-
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
-	if err != nil {
-		return false, err
-	}
-
-	decodedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
-	if err != nil {
-		return false, err
-	}
-
-	keyLen := uint32(len(decodedHash))
-	comparisonHash := argon2.IDKey([]byte(password), salt, time, memory, threads, keyLen)
-
-	if subtle.ConstantTimeCompare(decodedHash, comparisonHash) == 1 {
-		return true, nil
-	}
-
-	return false, nil
+	return subtle.ConstantTimeCompare(candidate, expectedHash) == 1, nil
 }
