@@ -18,9 +18,8 @@ create table if not exists account.creds (
     email varchar(100) not null unique,
     password bytea not null,
     key text not null unique,
-    updatedAt timestamptz default now()
+	updatedAt timestamptz default now()
 );
-create index idx_creds_key on account.creds using hash (key);
 
 create or replace function account.generate_key(out key text)
 as $$

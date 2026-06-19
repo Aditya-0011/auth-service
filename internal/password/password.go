@@ -1,4 +1,4 @@
-package utils
+package password
 
 import (
 	"crypto/subtle"
@@ -18,7 +18,7 @@ const (
 
 var hashSem = make(chan struct{}, 1)
 
-func GenerateHash(password []byte) ([]byte, error) {
+func Hash(pass []byte) ([]byte, error) {
 	hashSem <- struct{}{}
 	defer func() { <-hashSem }()
 
@@ -27,7 +27,7 @@ func GenerateHash(password []byte) ([]byte, error) {
 		return nil, fmt.Errorf("generating salt: %w", err)
 	}
 
-	hash := argon2.IDKey(password, salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	hash := argon2.IDKey(pass, salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 
 	out := make([]byte, argonHashLen)
 	copy(out[:argonSaltLen], salt)
@@ -36,7 +36,7 @@ func GenerateHash(password []byte) ([]byte, error) {
 	return out, nil
 }
 
-func ComparePassword(password, stored []byte) (bool, error) {
+func Compare(pass, stored []byte) (bool, error) {
 	if len(stored) != int(argonHashLen) {
 		return false, fmt.Errorf("invalid stored hash length: got %d, want %d", len(stored), argonHashLen)
 	}
@@ -47,7 +47,7 @@ func ComparePassword(password, stored []byte) (bool, error) {
 	hashSem <- struct{}{}
 	defer func() { <-hashSem }()
 
-	candidate := argon2.IDKey(password, salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	candidate := argon2.IDKey(pass, salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 
 	return subtle.ConstantTimeCompare(candidate, expectedHash) == 1, nil
 }

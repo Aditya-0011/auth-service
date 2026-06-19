@@ -22,7 +22,7 @@ func Setup(ctx context.Context) (*DatabaseParams, error) {
 		return nil, err
 	}
 
-	slog.Info("Postgres initialized")
+	slog.LogAttrs(context.Background(), slog.LevelInfo, "Postgres initialized")
 
 	return &DatabaseParams{
 		Postgres: postgres,
@@ -30,10 +30,10 @@ func Setup(ctx context.Context) (*DatabaseParams, error) {
 }
 
 func (s *DatabaseParams) Cleanup() error {
-	slog.Info("Closing database connections")
+	slog.LogAttrs(context.Background(), slog.LevelInfo, "Closing database connections")
 
 	if err := s.Postgres.disconnectPostgres(); err != nil {
-		slog.Error("Error disconnecting Postgres", "error", err)
+		slog.LogAttrs(context.Background(), slog.LevelError, "Error disconnecting Postgres", slog.String("error", err.Error()))
 	}
 
 	return nil

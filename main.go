@@ -3,10 +3,9 @@ package main
 import (
 	"auth/controller"
 	"auth/db"
+	"auth/internal/timeout"
 	"auth/middlewares"
-	"auth/utils"
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -19,6 +18,7 @@ import (
 	"buf.build/go/protovalidate"
 	"github.com/Aditya-0011/common/contracts/go/auth"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 func main() {
@@ -31,7 +31,7 @@ func main() {
 		slog.Int64("GOMEMLIMIT_MiB", debug.SetMemoryLimit(-1)/1024/1024),
 	)
 
-	setupCtx, setupCancel := context.WithTimeout(context.Background(), utils.TimeoutDuration)
+	setupCtx, setupCancel := context.WithTimeout(context.Background(), timeout.Duration)
 	defer setupCancel()
 
 	database, err := db.Setup(setupCtx)
@@ -46,7 +46,7 @@ func main() {
 		port = "7295"
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
+	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		slog.LogAttrs(context.Background(), slog.LevelError, "failed to listen", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -59,8 +59,22 @@ func main() {
 	}
 
 	s := grpc.NewServer(
-		grpc.UnaryInterceptor(middlewares.ValidationInterceptor(validator)),
+		grpc.ChainUnaryInterceptor(
+			middlewares.LoggingInterceptor(),
+			middlewares.ValidationInterceptor(validator),
+		),
 		grpc.MaxConcurrentStreams(50),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionIdle: 5 * time.Minute,
+			MaxConnectionAge:  30 * time.Minute,
+			Time:              1 * time.Minute,
+			Timeout:           20 * time.Second,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             30 * time.Second,
+			PermitWithoutStream: false,
+		}),
+		grpc.MaxRecvMsgSize(4*1024*1024),
 	)
 
 	auth.RegisterAuthServiceServer(s, controller.NewServer(controller.ServerParams{
@@ -81,10 +95,10 @@ func main() {
 
 	select {
 	case <-quit:
-		slog.Info("Interrupt received. Starting graceful shutdown...")
+		slog.LogAttrs(context.Background(), slog.LevelInfo, "Interrupt received. Starting graceful shutdown...")
 	case err := <-errChan:
 		slog.LogAttrs(context.Background(), slog.LevelError, "gRPC server failed", slog.String("error", err.Error()))
-		slog.Info("Starting graceful shutdown due to server error...")
+		slog.LogAttrs(context.Background(), slog.LevelInfo, "Starting graceful shutdown due to server error...")
 	}
 
 	stopped := make(chan struct{})
@@ -93,16 +107,16 @@ func main() {
 		close(stopped)
 	}()
 
-	shutdownTimer := time.NewTimer(utils.TimeoutDuration)
+	shutdownTimer := time.NewTimer(timeout.Duration)
 	defer shutdownTimer.Stop()
 
 	select {
 	case <-shutdownTimer.C:
-		slog.Info("Timeout reached. Forcing server shutdown...")
+		slog.LogAttrs(context.Background(), slog.LevelInfo, "Timeout reached. Forcing server shutdown...")
 		s.Stop()
 	case <-stopped:
-		slog.Info("Server gracefully stopped within timeout.")
+		slog.LogAttrs(context.Background(), slog.LevelInfo, "Server gracefully stopped within timeout.")
 	}
 
-	slog.Info("Shutdown complete. Exiting main...")
+	slog.LogAttrs(context.Background(), slog.LevelInfo, "Shutdown complete. Exiting main...")
 }

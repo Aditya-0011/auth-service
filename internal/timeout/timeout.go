@@ -1,4 +1,4 @@
-package utils
+package timeout
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	TimeoutDuration = 5 * time.Second
+	Duration = 5 * time.Second
 )
 
 func WithDeadline(c context.Context, d time.Duration) (context.Context, context.CancelFunc) {

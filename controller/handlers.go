@@ -2,14 +2,13 @@ package controller
 
 import (
 	"auth/db"
-	"auth/utils"
+	"auth/internal/password"
+	"auth/internal/timeout"
 	"context"
 	"log/slog"
 	"time"
 
 	"github.com/Aditya-0011/common/contracts/go/auth"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -31,13 +30,13 @@ func NewServer(params ServerParams) *server {
 }
 
 func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
-	ctx, cancel := utils.WithDeadline(c, utils.TimeoutDuration)
+	ctx, cancel := timeout.WithDeadline(c, timeout.Duration)
 	defer cancel()
 
 	var (
-		count    int
-		id       *int
-		password *[]byte
+		count      int
+		id         *int
+		dbPassword *[]byte
 	)
 
 	query := `
@@ -46,59 +45,58 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 		from total 
 		left join account.creds c on c.email = $1
 	`
-	err := s.postgres.Pool.QueryRow(ctx, query, req.GetEmail()).Scan(&count, &id, &password)
+	err := s.postgres.Pool.QueryRow(ctx, query, req.GetEmail()).Scan(&count, &id, &dbPassword)
 	if err != nil {
 		slog.LogAttrs(ctx, slog.LevelError, "error querying database",
 			slog.String("error", err.Error()))
-		return nil, status.Errorf(codes.Internal, "Internal server error")
+		return nil, ErrInternal
 	}
 
 	if count == 0 {
-		hashedPassword, err := utils.GenerateHash([]byte(req.GetPassword()))
+		hashedPassword, err := password.Hash([]byte(req.GetPassword()))
 		if err != nil {
 			slog.LogAttrs(ctx, slog.LevelError, "error generating hash",
 				slog.String("error", err.Error()))
-			return nil, status.Errorf(codes.Internal, "Error generating hash")
+			return nil, ErrInternal
 		}
 
 		var (
 			newId   int
-			outcode int8
+			outcode int16
 		)
 
 		err = s.postgres.Pool.QueryRow(ctx, "select * from account.create($1, $2)", req.GetEmail(), hashedPassword).Scan(&newId, &outcode)
 		if err != nil {
 			slog.LogAttrs(ctx, slog.LevelError, "error creating user",
 				slog.String("error", err.Error()))
-			return nil, status.Errorf(codes.Internal, "Error creating user")
+			return nil, ErrInternalCreate
 		}
 
 		switch outcode {
 		case -1:
 			return &auth.LoginResponse{UserId: int32(newId), UserEmail: req.GetEmail()}, nil
 		case 0: // currently only supports single user - Aditya Punmiya
-			return nil, status.Errorf(codes.NotFound, "User not found")
+			return nil, ErrUserNotFound
 		case 1:
-			return nil, status.Errorf(codes.NotFound, "User not found")
+			return nil, ErrUserNotFound
 		default:
-			return nil, status.Errorf(codes.Internal, "Error creating user")
+			return nil, ErrInternalCreate
 		}
 
 	} else {
-		if id == nil || password == nil {
-			slog.LogAttrs(ctx, slog.LevelError, "invalid email provided")
-			return nil, status.Errorf(codes.Unauthenticated, "Invalid credentials")
+		if id == nil || dbPassword == nil {
+			return nil, ErrUnauthenticated
 		}
 
-		match, err := utils.ComparePassword([]byte(req.GetPassword()), *password)
+		match, err := password.Compare([]byte(req.GetPassword()), *dbPassword)
 		if err != nil {
 			slog.LogAttrs(ctx, slog.LevelError, "error verifying password",
 				slog.String("error", err.Error()))
-			return nil, status.Errorf(codes.Internal, "Error verifying password")
+			return nil, ErrInternal
 		}
 
 		if !match {
-			return nil, status.Errorf(codes.Unauthenticated, "Invalid credentials")
+			return nil, ErrUnauthenticated
 		}
 
 		return &auth.LoginResponse{UserId: int32(*id), UserEmail: req.GetEmail()}, nil
@@ -106,7 +104,7 @@ func (s *server) Login(c context.Context, req *auth.LoginRequest) (*auth.LoginRe
 }
 
 func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyResponse, error) {
-	ctx, cancel := utils.WithDeadline(c, utils.TimeoutDuration)
+	ctx, cancel := timeout.WithDeadline(c, timeout.Duration)
 	defer cancel()
 
 	var (
@@ -120,11 +118,11 @@ func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyRe
 	if err != nil {
 		slog.LogAttrs(ctx, slog.LevelError, "error querying database",
 			slog.String("error", err.Error()))
-		return nil, status.Errorf(codes.Internal, "Internal server error")
+		return nil, ErrInternal
 	}
 
 	if key == "" {
-		return nil, status.Errorf(codes.NotFound, "Key not found")
+		return nil, ErrKeyNotFound
 	}
 
 	return &auth.GetKeyResponse{
@@ -134,31 +132,31 @@ func (s *server) GetKey(c context.Context, req *auth.KeyRequest) (*auth.GetKeyRe
 }
 
 func (s *server) RotateKey(c context.Context, req *auth.KeyRequest) (*auth.SimpleResponse, error) {
-	ctx, cancel := utils.WithDeadline(c, utils.TimeoutDuration)
+	ctx, cancel := timeout.WithDeadline(c, timeout.Duration)
 	defer cancel()
 
-	var outcode int8
+	var outcode int16
 
 	err := s.postgres.Pool.QueryRow(ctx, `select outcode from account.rotate_key($1)`, req.GetUserId()).Scan(&outcode)
 	if err != nil {
 		slog.LogAttrs(ctx, slog.LevelError, "error rotating key",
 			slog.Int("userId", int(req.GetUserId())),
 			slog.String("error", err.Error()))
-		return nil, status.Errorf(codes.Internal, "Error rotating key")
+		return nil, ErrInternal
 	}
 
 	switch outcode {
 	case -1:
 		return &auth.SimpleResponse{Message: "Key rotated successfully"}, nil
 	case 1:
-		return nil, status.Errorf(codes.NotFound, "User not found")
+		return nil, ErrUserNotFound
 	default:
-		return nil, status.Errorf(codes.Internal, "Error rotating user")
+		return nil, ErrInternal
 	}
 }
 
 func (s *server) ValidateKey(c context.Context, req *auth.ValidateKeyRequest) (*auth.LoginResponse, error) {
-	ctx, cancel := utils.WithDeadline(c, utils.TimeoutDuration)
+	ctx, cancel := timeout.WithDeadline(c, timeout.Duration)
 	defer cancel()
 
 	var (
@@ -176,11 +174,11 @@ func (s *server) ValidateKey(c context.Context, req *auth.ValidateKeyRequest) (*
 		slog.LogAttrs(ctx, slog.LevelError, "error validating key",
 			slog.String("key_prefix", keyPrefix),
 			slog.String("error", err.Error()))
-		return nil, status.Errorf(codes.Internal, "Error validating key")
+		return nil, ErrInternal
 	}
 
 	if userId == nil || email == nil {
-		return nil, status.Errorf(codes.NotFound, "Key not found")
+		return nil, ErrKeyNotFound
 	}
 
 	return &auth.LoginResponse{UserId: int32(*userId), UserEmail: *email}, nil

@@ -1,7 +1,7 @@
 package db
 
 import (
-	"auth/utils"
+	"auth/internal/timeout"
 	"context"
 	"fmt"
 	"log/slog"
@@ -15,7 +15,7 @@ type PostgresParams struct {
 }
 
 func connectPostgres(c context.Context, url string) (*PostgresParams, error) {
-	ctx, cancel := context.WithTimeout(c, utils.TimeoutDuration)
+	ctx, cancel := context.WithTimeout(c, timeout.Duration)
 	defer cancel()
 
 	config, err := pgxpool.ParseConfig(url)
@@ -27,6 +27,7 @@ func connectPostgres(c context.Context, url string) (*PostgresParams, error) {
 	config.MinConns = 1
 	config.MaxConnLifetime = 30 * time.Minute
 	config.MaxConnIdleTime = 5 * time.Minute
+	config.MaxConnLifetimeJitter = 5 * time.Minute
 	config.HealthCheckPeriod = 1 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
@@ -38,13 +39,13 @@ func connectPostgres(c context.Context, url string) (*PostgresParams, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
-	slog.Info("Successfully connected to Postgres pool")
+	slog.LogAttrs(context.Background(), slog.LevelInfo, "Successfully connected to Postgres pool")
 
 	return &PostgresParams{Pool: pool}, nil
 }
 
 func (p *PostgresParams) disconnectPostgres() error {
-	slog.Info("Disconnecting from Postgres...")
+	slog.LogAttrs(context.Background(), slog.LevelInfo, "Disconnecting from Postgres...")
 	p.Pool.Close()
 	return nil
 }
