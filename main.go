@@ -34,6 +34,11 @@ func main() {
 	setupCtx, setupCancel := context.WithTimeout(context.Background(), timeout.Duration)
 	defer setupCancel()
 
+	bindIP := os.Getenv("INTERNAL_BIND_IP")
+	if bindIP == "" {
+		bindIP = "127.0.0.1"
+	}
+
 	database, err := db.Setup(setupCtx)
 	if err != nil {
 		slog.LogAttrs(context.Background(), slog.LevelError, "Failed to setup databases", slog.String("error", err.Error()))
@@ -46,7 +51,7 @@ func main() {
 		port = "7295"
 	}
 
-	lis, err := net.Listen("tcp", ":"+port)
+	lis, err := net.Listen("tcp", bindIP+":"+port)
 	if err != nil {
 		slog.LogAttrs(context.Background(), slog.LevelError, "failed to listen", slog.String("error", err.Error()))
 		os.Exit(1)

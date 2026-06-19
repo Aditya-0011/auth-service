@@ -39,7 +39,10 @@ func connectPostgres(c context.Context, url string) (*PostgresParams, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
-	slog.LogAttrs(context.Background(), slog.LevelInfo, "Successfully connected to Postgres pool")
+	slog.LogAttrs(ctx, slog.LevelInfo, "Successfully connected to Postgres pool",
+		slog.Int("maxConns", int(config.MaxConns)),
+		slog.Int("minConns", int(config.MinConns)),
+	)
 
 	return &PostgresParams{Pool: pool}, nil
 }
