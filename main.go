@@ -36,7 +36,7 @@ func main() {
 
 	bindIP := os.Getenv("INTERNAL_BIND_IP")
 	if bindIP == "" {
-		bindIP = "127.0.0.1"
+		bindIP = "0.0.0.0"
 	}
 
 	database, err := db.Setup(setupCtx)
