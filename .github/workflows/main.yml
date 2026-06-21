@@ -61,7 +61,7 @@ jobs:
               --network host \
               --env-file ~/auth-service-production.conf \
               --restart unless-stopped \
-              --memory 768m \
+              --memory 1024m \
               --cpus 1 \
               ghcr.io/aditya-0011/auth-service:latest
 
