@@ -27,5 +27,5 @@ go.work.sum
 *.ps1
 .air.toml
 /tmp
-.agents
-skills-lock.json
+
+/.agents
