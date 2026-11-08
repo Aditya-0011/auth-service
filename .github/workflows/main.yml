@@ -55,14 +55,14 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
-          TARGET: ${{ env.IMAGE }}:${{ github.sha }}
+          DEPLOY_IMAGE: ${{ env.IMAGE }}:${{ github.sha }}
         with:
           host: ${{ secrets.VM_IP }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_KEY }}
           port: 22
           version: "1.8.5"
-          envs: GHCR_TOKEN,GHCR_USER,TARGET
+          envs: GHCR_TOKEN,GHCR_USER,DEPLOY_IMAGE
           script: |
             set -euo pipefail
             NAME=auth-service
@@ -71,7 +71,7 @@ jobs:
             trap 'rm -rf "$AUTHDIR"' EXIT
 
             echo "$GHCR_TOKEN" | podman login ghcr.io -u "$GHCR_USER" --password-stdin --authfile "$AUTHFILE"
-            podman pull --authfile "$AUTHFILE" "$TARGET"
+            podman pull --authfile "$AUTHFILE" "$DEPLOY_IMAGE"
             podman logout --authfile "$AUTHFILE" ghcr.io || true
 
             PREVIOUS="$(podman inspect --format '{{.ImageName}}' "$NAME" 2>/dev/null || true)"
@@ -93,7 +93,7 @@ jobs:
                 "$1"
             }
 
-            start "$TARGET"
+            start "$DEPLOY_IMAGE"
             sleep 10
             if [ "$(podman inspect --format '{{.State.Running}}' "$NAME")" != "true" ]; then
               echo "::error::$NAME failed to start"
