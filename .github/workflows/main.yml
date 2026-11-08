@@ -61,12 +61,14 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_KEY }}
           port: 22
+          version: "1.8.5"
           envs: GHCR_TOKEN,GHCR_USER,TARGET
           script: |
             set -euo pipefail
             NAME=auth-service
-            AUTHFILE="$(mktemp)"
-            trap 'rm -f "$AUTHFILE"' EXIT
+            AUTHDIR="$(mktemp -d)"
+            AUTHFILE="$AUTHDIR/auth.json"
+            trap 'rm -rf "$AUTHDIR"' EXIT
 
             echo "$GHCR_TOKEN" | podman login ghcr.io -u "$GHCR_USER" --password-stdin --authfile "$AUTHFILE"
             podman pull --authfile "$AUTHFILE" "$TARGET"
