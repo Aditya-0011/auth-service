@@ -3,7 +3,7 @@
 .agents/
 .vscode/
 .air.toml
-.ps1
+*.ps1
 skills-lock.json
 .env
 .env.*

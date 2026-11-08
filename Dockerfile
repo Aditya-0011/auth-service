@@ -1,5 +1,5 @@
-ARG GO_VERSION=1.26.4
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder
+ARG GO_VERSION=1.27.3
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine3.24 AS builder
 
 RUN apk add --no-cache git tzdata ca-certificates
 
@@ -14,6 +14,8 @@ RUN --mount=type=secret,id=GITHUB_TOKEN \
 
 COPY . .
 
+RUN CGO_ENABLED=0 go vet ./... && CGO_ENABLED=0 go test ./...
+
 ARG TARGETOS TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -ldflags "-s -w" -trimpath -tags netgo -o bin-auth main.go
@@ -26,7 +28,9 @@ COPY --from=builder /app/bin-auth /auth
 EXPOSE 7295
 
 ENV GOMAXPROCS=1 \
-    GOMEMLIMIT=850MiB \
-    GOGC=200
+    GOMEMLIMIT=300MiB \
+    GOGC=100
+
+USER 65532:65532
 
 ENTRYPOINT ["/auth"]
