@@ -8,7 +8,7 @@ A secure, strictly-typed gRPC authentication service tailored for platform ident
 
 ## Overview
 
-The auth service acts as the identity provider for the platform. It provides the mechanism to securely log into the admin console and manages the lifecycle of long-lived API keys used by external applications. The database schema is designed with multi-tenancy in mind but is currently locked to a single-tenant instance (ID=1) by design.
+The auth service acts as the identity provider for the platform. It provides the mechanism to securely log into the admin console and manages the lifecycle of long-lived API keys used by external applications. Accounts are multi-user with role-based access: one administrator and any number of tenants.
 
 
 
@@ -35,8 +35,8 @@ This section explains the technologies and physical layout of the service.
 
 This section outlines the capabilities of the auth service.
 
-- **Scalable identity**: Architecturally capable of multi-tenancy.
-- **API key management**: Retrieve, validate, and securely rotate active prefixed API keys.
+- **Role-based identity**: One administrator and any number of tenants, each with per-project access.
+- **API key management**: Validate, securely rotate, and revoke prefixed API keys, and read back their hint and allowed origins.
 - **Payload validation**: Rejects malformed requests before they hit the controller.
 - **Secure hash algorithms**: Uses `golang.org/x/crypto` for secure password hashing and comparison.
 
@@ -44,8 +44,8 @@ This section outlines the capabilities of the auth service.
 
 The auth service leverages PostgreSQL with a strict focus on the principle of least privilege:
 
-- Operates under the isolated `account` schema, managing the `creds` table
-- Generates secure, prefixed API keys directly within the database layer using the `pgcrypto` extension
+- Operates under the isolated `account` schema of the shared `infra` database, managing the `creds`, `recovery_code`, `project`, and `project_access` tables
+- Generates secure, prefixed API keys in the service (`internal/secret`, using `crypto/rand`); the database stores only their SHA-256 hash and a short hint
 - The `auth_service` database role does **not** have direct `INSERT`, `UPDATE`, or `DELETE` permissions on tables
 - All database mutations execute through securely defined stored functions
 
@@ -81,7 +81,7 @@ Run the service using the Go CLI:
 go run main.go
 ```
 
-To watch for file changes and automatically rebuild and restart the server, use [air](https://github.com/cosmtrek/air):
+To watch for file changes and automatically rebuild and restart the server, use [air](https://github.com/air-verse/air):
 
 ```bash
 go install github.com/air-verse/air@latest
@@ -110,4 +110,4 @@ There is no email or SMS reset:
 
 ## Deployment
 
-The service is containerized and leverages GitHub Actions (`.github/workflows/main.yml`) for automated builds and deployment to a remote VM using Podman.
+The service is containerized and leverages a manually triggered GitHub Actions workflow (`.github/workflows/main.yml`, `workflow_dispatch`) for builds and deployment to a remote VM using Podman.
